@@ -99,4 +99,4 @@ cargo build                         # 编译检查，应无 warning
 | [`design-system/pantry/MASTER.md`](design-system/pantry/MASTER.md) | 设计规范：色板、排版、组件职责、反模式与交付前检查清单 |
 | [`AGENTS.md`](AGENTS.md) | 协作规范：提交信息格式、语言策略、CodeGraph 用法 |
 
-提交信息用中文 Conventional Commits（`<type>[scope]: <summary>`），一次提交只做一类变更；提交前跑 `pnpm build` 与 `cargo test`。
+日常开发在 `develop` 分支，`main` 只接受合并。提交信息用中文 Conventional Commits（`<type>[scope]: <summary>`），一次提交只做一类变更；提交前跑 `pnpm build` 与 `cargo test`。
