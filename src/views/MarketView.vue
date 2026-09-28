@@ -617,12 +617,8 @@ useScrollLock(readmeOpen);
               {{ readme.name }}@{{ readme.version }} · README
             </h3>
             <div class="flex shrink-0 items-center gap-2">
-              <a
-                :href="readme.sourceUrl"
-                target="_blank"
-                rel="noreferrer"
-                class="font-mono text-caption text-accent"
-              >在浏览器打开</a>
+              <!-- 走同一条外链通道：<a target="_blank"> 在 webview 里没有落地的地方 -->
+              <AppExternalLink :url="readme.sourceUrl" label="在浏览器打开" @failed="onLinkFailed" />
               <AppButton @click="readmeOpen = false">关闭</AppButton>
             </div>
           </header>

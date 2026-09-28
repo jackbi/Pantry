@@ -9,7 +9,13 @@
 import { PhArrowSquareOut } from "@phosphor-icons/vue";
 import { invoke } from "@tauri-apps/api/core";
 
-const props = defineProps<{ url: string }>();
+import { tokenFont } from "../../lib/text";
+
+const props = defineProps<{
+  url: string;
+  /** 显示文字，默认就是地址本身；写中文标签时等宽会自动去掉（MASTER.md 的排版规则） */
+  label?: string;
+}>();
 
 const emit = defineEmits<{ failed: [message: string] }>();
 
@@ -25,12 +31,13 @@ async function open() {
 <template>
   <button
     type="button"
-    class="inline-flex max-w-full cursor-pointer items-start gap-1.5 rounded-control text-left font-mono text-label text-accent transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:opacity-80"
+    class="inline-flex max-w-full cursor-pointer items-start gap-1.5 rounded-control text-left text-label text-accent transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:opacity-80"
+    :class="tokenFont(label ?? url)"
     :title="url"
     :aria-label="`在浏览器中打开 ${url}`"
     @click="open"
   >
     <PhArrowSquareOut :size="13" class="mt-0.5 shrink-0" aria-hidden="true" />
-    <span class="wrap-token">{{ url }}</span>
+    <span class="wrap-token">{{ label ?? url }}</span>
   </button>
 </template>
