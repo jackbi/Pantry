@@ -243,6 +243,7 @@
 - [x] **brew 搜索 / 详情也带代理**：新增 `brew_env(proxy)`，`run_brew` / `search_names` / `info_batch` 全部走它（有单测钉住 `HOMEBREW_NO_AUTO_UPDATE` 仍在、空白代理按未设置处理）
 - [x] **「恢复默认」改为只改草稿**：不再绕过「保存设置」直接写 localStorage，误点不会悄悄覆盖已保存的配置；草稿已是默认值时按钮置灰（判断要把证书开关算进去，否则「只打开了开关」那种状态下按钮会点了没反应）
 - [x] **`AppSwitch` 整行可点**：原来只有滑块与「开 / 关」文字是点击目标，标题与说明点了没反应（注释却写着整行可点）。现在整行是**一个** `button`（不嵌套按钮），标题与说明分别用 `aria-labelledby` / `aria-describedby` 关联
+- [x] **弹窗不再被粘性表头盖住**：详情面板位于 `sticky` 列，而 `sticky` 自成层叠上下文，`fixed inset-0 z-1000` 的弹窗被困在里面，被列表的粘性表头（`z-10`）横穿。升级确认框与 README 弹层改为 `<Teleport to="body">`，并把这条件写进 MASTER.md 的已知陷阱（实测方式：表头与弹窗重叠处用 `elementsFromPoint` 判断命中谁）
 
 ### 外链与包元数据（本轮）
 

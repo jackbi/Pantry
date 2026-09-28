@@ -596,36 +596,41 @@ useScrollLock(readmeOpen);
     </div>
     </div>
 
-    <!-- README 用模态承载：长内容自带滚动是合理的，放在侧栏里则会和页面滚动打架 -->
-    <div
-      v-if="readmeOpen && readme"
-      class="fixed inset-0 z-1000 flex items-center justify-center bg-foreground/20 p-6 backdrop-blur-sm"
-      @click.self="readmeOpen = false"
-    >
+    <!--
+      README 用模态承载：长内容自带滚动是合理的，放在侧栏里则会和页面滚动打架。
+      同样 Teleport 到 body：详情面板在 sticky 列里，留在原地会被困进那层层叠上下文。
+    -->
+    <Teleport to="body">
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="readme-title"
-        class="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-card border border-border bg-surface"
+        v-if="readmeOpen && readme"
+        class="fixed inset-0 z-1000 flex items-center justify-center bg-foreground/20 p-6 backdrop-blur-sm"
+        @click.self="readmeOpen = false"
       >
-        <header class="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
-          <h3 id="readme-title" class="min-w-0 truncate font-mono text-title font-medium">
-            {{ readme.name }}@{{ readme.version }} · README
-          </h3>
-          <div class="flex shrink-0 items-center gap-2">
-            <a
-              :href="readme.sourceUrl"
-              target="_blank"
-              rel="noreferrer"
-              class="font-mono text-caption text-accent"
-            >在浏览器打开</a>
-            <AppButton @click="readmeOpen = false">关闭</AppButton>
-          </div>
-        </header>
-        <pre
-          class="min-h-0 flex-1 overflow-auto bg-muted p-4 font-mono text-caption leading-relaxed whitespace-pre-wrap wrap-token"
-        >{{ readme.markdown }}</pre>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="readme-title"
+          class="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-card border border-border bg-surface"
+        >
+          <header class="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+            <h3 id="readme-title" class="min-w-0 truncate font-mono text-title font-medium">
+              {{ readme.name }}@{{ readme.version }} · README
+            </h3>
+            <div class="flex shrink-0 items-center gap-2">
+              <a
+                :href="readme.sourceUrl"
+                target="_blank"
+                rel="noreferrer"
+                class="font-mono text-caption text-accent"
+              >在浏览器打开</a>
+              <AppButton @click="readmeOpen = false">关闭</AppButton>
+            </div>
+          </header>
+          <pre
+            class="min-h-0 flex-1 overflow-auto bg-muted p-4 font-mono text-caption leading-relaxed whitespace-pre-wrap wrap-token"
+          >{{ readme.markdown }}</pre>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>

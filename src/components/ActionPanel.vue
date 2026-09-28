@@ -193,34 +193,40 @@ useScrollLock(confirming);
       切到「已安装」页会重新扫描，能看到最新结果。
     </p>
 
-    <!-- 破坏性操作的二次确认：用模态而不是行内按钮，避免与旁边的控件混淆 -->
-    <div
-      v-if="confirming"
-      class="fixed inset-0 z-1000 flex items-center justify-center bg-foreground/20 p-6 backdrop-blur-sm"
-      @click.self="confirming = false"
-    >
+    <!--
+      破坏性操作的二次确认：用模态而不是行内按钮，避免与旁边的控件混淆。
+      必须 Teleport 到 body：详情面板在 sticky 列里，而 sticky 会自成层叠上下文，
+      留在原地的话这层 fixed + z-1000 会被困在下面，被列表的粘性表头（z-10）盖住。
+    -->
+    <Teleport to="body">
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-title"
-        class="w-full max-w-sm rounded-card border border-border bg-surface p-4"
+        v-if="confirming"
+        class="fixed inset-0 z-1000 flex items-center justify-center bg-foreground/20 p-6 backdrop-blur-sm"
+        @click.self="confirming = false"
       >
-        <h3 id="confirm-title" class="mb-2 text-title font-medium">
-          确认{{ action === "uninstall" ? "卸载" : "升级" }} {{ name }}？
-        </h3>
-        <p class="mb-2 text-muted-foreground">
-          {{ action === "uninstall" ? "卸载后该命令会从系统中移除。" : "将按 registry 上的最新版本重新安装。" }}
-        </p>
-        <p class="mb-3 wrap-token rounded-control border border-border bg-muted px-3 py-2 font-mono text-label">
-          {{ plan?.display }}
-        </p>
-        <div class="flex justify-end gap-2">
-          <AppButton ref="cancelButton" @click="confirming = false">取消</AppButton>
-          <AppButton variant="danger" @click="start(false)">
-            确认{{ action === "uninstall" ? "卸载" : "升级" }}
-          </AppButton>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-title"
+          class="w-full max-w-sm rounded-card border border-border bg-surface p-4"
+        >
+          <h3 id="confirm-title" class="mb-2 text-title font-medium">
+            确认{{ action === "uninstall" ? "卸载" : "升级" }} {{ name }}？
+          </h3>
+          <p class="mb-2 text-muted-foreground">
+            {{ action === "uninstall" ? "卸载后该命令会从系统中移除。" : "将按 registry 上的最新版本重新安装。" }}
+          </p>
+          <p class="mb-3 wrap-token rounded-control border border-border bg-muted px-3 py-2 font-mono text-label">
+            {{ plan?.display }}
+          </p>
+          <div class="flex justify-end gap-2">
+            <AppButton ref="cancelButton" @click="confirming = false">取消</AppButton>
+            <AppButton variant="danger" @click="start(false)">
+              确认{{ action === "uninstall" ? "卸载" : "升级" }}
+            </AppButton>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
