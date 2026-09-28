@@ -23,6 +23,7 @@ import AppSearchField from "../components/ui/AppSearchField.vue";
 import AppTag from "../components/ui/AppTag.vue";
 import StatusBadge from "../components/ui/StatusBadge.vue";
 import ActionPanel from "../components/ActionPanel.vue";
+import { onActionSettled, type ActionSession } from "../composables/useActionSessions";
 import { useSettings } from "../composables/useSettings";
 import { isTauri } from "../lib/tauri";
 import { formatNumber } from "../lib/format";
@@ -171,10 +172,18 @@ async function openTarget(mode: "open" | "reveal") {
   }
 }
 
-async function onActionFinished(code: number | null) {
-  if (code !== 0) return;
+/**
+ * 结束通知来自会话层：面板在切走时就被销毁了，它自己的 emit 发不出来。
+ */
+onActionSettled((session) => {
+  void onActionFinished(session);
+});
+
+async function onActionFinished(session: ActionSession) {
+  if (session.exitCode !== 0) return;
   const item = selected.value;
-  if (!item) return;
+  // 订阅是全局的：别的包（或别的页面的 brew 包）执行完不该打断当前详情
+  if (!item || session.target.source !== "brew" || item.name !== session.target.name) return;
   // select() 会清空提示，所以要等它读完后再说"已完成"
   await select(item);
   notice.value = "命令已完成，这里是重新读取到的状态";
@@ -455,7 +464,6 @@ function onKeydown(event: KeyboardEvent) {
                 :name="selected.name"
                 :kind="detail?.kind ?? selected.kind"
                 :upgrade-available="upgradeAvailable"
-                @finished="onActionFinished"
               />
             </div>
           </div>

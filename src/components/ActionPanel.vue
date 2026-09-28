@@ -3,18 +3,26 @@
 //
 // 流程刻意做成"先看命令，再执行"：先展示将执行的完整命令，破坏性操作还要二次确认。
 // 真正执行时交给后端的并发锁保证同一时刻只有一个任务，前端只是把按钮禁用掉。
+//
+// 日志与执行状态不在这个组件里（见 useActionSessions）：面板随选中项挂载销毁，
+// 状态留在这儿就等于"切走即丢"。
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { PhPlay, PhStopCircle } from "@phosphor-icons/vue";
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import AppButton from "./ui/AppButton.vue";
 import LogViewer from "./ui/LogViewer.vue";
 import StatusBadge from "./ui/StatusBadge.vue";
+import {
+  actionSession,
+  cancelAction,
+  startAction,
+  type ActionTarget,
+} from "../composables/useActionSessions";
 import { isTauri } from "../lib/tauri";
 import { useScrollLock } from "../composables/useScrollLock";
 import { useSettings } from "../composables/useSettings";
-import type { PackageAction, PlannedCommand, ProcEvent } from "../types";
+import type { PackageAction, PlannedCommand } from "../types";
 
 const props = defineProps<{
   source: string;
@@ -26,24 +34,23 @@ const props = defineProps<{
   upgradeAvailable?: boolean;
 }>();
 
-const emit = defineEmits<{ finished: [code: number | null] }>();
-
 // 安装命令要跟设置页的数据源 / 代理一致：确认框里展示的就是最终会执行的那条
 const { requestOptions } = useSettings();
 
-type LogLine = { stream: string; line: string };
+const target = computed<ActionTarget>(() => ({
+  source: props.source,
+  action: props.action,
+  name: props.name,
+  version: props.version ?? null,
+  kind: props.kind ?? null,
+}));
+
+/** 会话按目标共享：切到别的包再切回来，看到的还是同一条日志 */
+const session = computed(() => actionSession(target.value));
 
 const plan = ref<PlannedCommand | null>(null);
 const planError = ref<string | null>(null);
 const confirming = ref(false);
-const running = ref(false);
-const taskId = ref<string | null>(null);
-const lines = ref<LogLine[]>([]);
-const exitCode = ref<number | null>(null);
-const finished = ref(false);
-const permissionIssue = ref(false);
-
-const MAX_LINES = 2000;
 
 const upgradeBlocked = computed(() => props.action === "upgrade" && props.upgradeAvailable === false);
 const cancelButton = ref<HTMLButtonElement | null>(null);
@@ -51,10 +58,6 @@ const cancelButton = ref<HTMLButtonElement | null>(null);
 async function loadPlan() {
   plan.value = null;
   planError.value = null;
-  exitCode.value = null;
-  finished.value = false;
-  lines.value = [];
-  permissionIssue.value = false;
   if (!isTauri || !props.name) return;
   try {
     plan.value = await invoke<PlannedCommand>("plan_package_action", {
@@ -71,81 +74,18 @@ async function loadPlan() {
   }
 }
 
+// 这里只重取"将执行的命令"：日志与执行状态归会话管，不会因为面板重建被清空
 watch(() => [props.source, props.action, props.name, props.version, props.kind], loadPlan, {
   immediate: true,
 });
 
-function pushLine(stream: string, line: string) {
-  lines.value.push({ stream, line });
-  if (lines.value.length > MAX_LINES) {
-    lines.value.splice(0, lines.value.length - MAX_LINES);
-  }
-}
-
-let unlisten: UnlistenFn | null = null;
-
-async function ensureListener() {
-  if (unlisten) return;
-  unlisten = await listen<ProcEvent>("proc://event", ({ payload }) => {
-    if (!taskId.value || payload.id !== taskId.value) return;
-    if (payload.kind === "output") {
-      pushLine(payload.stream, payload.line);
-    } else if (payload.kind === "exit") {
-      exitCode.value = payload.code;
-      finished.value = true;
-      running.value = false;
-      pushLine(
-        "meta",
-        `退出：code=${payload.code ?? "被信号终止"} · killed=${payload.killed} · ${payload.elapsedMs}ms`,
-      );
-      void checkPermission();
-      emit("finished", payload.code);
-    }
-  });
-}
-
-async function checkPermission() {
-  if (exitCode.value === 0) return;
-  const texts = lines.value
-    .filter((item) => item.stream !== "meta")
-    .map((item) => item.line);
-  try {
-    permissionIssue.value = await invoke<boolean>("is_permission_issue", { lines: texts });
-  } catch {
-    permissionIssue.value = false;
-  }
-}
-
-async function start(admin: boolean) {
-  if (running.value) return;
+function start(admin: boolean) {
   confirming.value = false;
-  lines.value = [];
-  exitCode.value = null;
-  finished.value = false;
-  permissionIssue.value = false;
-
-  const id = `action-${Date.now()}`;
-  taskId.value = id;
-  try {
-    await ensureListener();
-    running.value = true;
-    await invoke<string>("run_package_action", {
-      taskId: id,
-      source: props.source,
-      action: props.action,
-      name: props.name,
-      version: props.version ?? null,
-      kind: props.kind ?? null,
-      admin,
-      ...requestOptions(),
-    });
-    pushLine("meta", `启动 ${plan.value?.display ?? props.name}`);
-  } catch (error) {
-    running.value = false;
-    taskId.value = null;
-    pushLine("stderr", error instanceof Error ? error.message : String(error));
-    finished.value = true;
-  }
+  void startAction(session.value, {
+    admin,
+    display: plan.value?.display ?? null,
+    ...requestOptions(),
+  });
 }
 
 async function openConfirm() {
@@ -155,15 +95,9 @@ async function openConfirm() {
   cancelButton.value?.focus();
 }
 
-async function cancel() {
-  if (!taskId.value) return;
-  await invoke<boolean>("cancel_command", { id: taskId.value });
+function cancel() {
+  void cancelAction(session.value);
 }
-
-onUnmounted(() => {
-  // unlisten 是 async：失败会变成 rejected promise，必须接住
-  void Promise.resolve(unlisten?.()).catch(() => {});
-});
 
 function onWindowKey(event: KeyboardEvent) {
   if (confirming.value && event.key === "Escape") confirming.value = false;
@@ -181,12 +115,12 @@ useScrollLock(confirming);
 <template>
   <div class="flex flex-col gap-2">
     <div class="flex flex-wrap items-center gap-2">
-      <StatusBadge v-if="running" tone="busy" label="执行中" />
-      <StatusBadge v-else-if="finished && exitCode === 0" tone="ok" label="完成" />
-      <StatusBadge v-else-if="finished" tone="danger" label="失败" />
+      <StatusBadge v-if="session.running" tone="busy" label="执行中" />
+      <StatusBadge v-else-if="session.finished && session.exitCode === 0" tone="ok" label="完成" />
+      <StatusBadge v-else-if="session.finished" tone="danger" label="失败" />
 
       <div class="ml-auto flex flex-wrap items-center gap-2">
-        <AppButton v-if="running" variant="danger" @click="cancel">
+        <AppButton v-if="session.running" variant="danger" @click="cancel">
           <PhStopCircle :size="14" aria-hidden="true" />
           取消
         </AppButton>
@@ -231,18 +165,21 @@ useScrollLock(confirming);
     </div>
 
     <LogViewer
-      v-if="lines.length > 0 || running"
-      :lines="lines"
+      v-if="session.lines.length > 0 || session.running"
+      :lines="session.lines"
       height="12rem"
       placeholder="等待输出…"
     />
 
-    <p v-if="permissionIssue && !running" class="flex flex-wrap items-center gap-2 rounded-control border border-border px-3 py-2">
+    <p
+      v-if="session.permissionIssue && !session.running"
+      class="flex flex-wrap items-center gap-2 rounded-control border border-border px-3 py-2"
+    >
       <span class="min-w-0 flex-1 wrap-token">输出看起来是权限问题。可以改用管理员权限重试，系统会弹出授权框。</span>
       <AppButton @click="start(true)">以管理员权限重试</AppButton>
     </p>
 
-    <p v-if="finished && exitCode === 0" class="text-caption text-muted-foreground">
+    <p v-if="session.finished && session.exitCode === 0" class="text-caption text-muted-foreground">
       已{{ action === "install" ? "安装" : action === "uninstall" ? "卸载" : "升级" }}完成。
       切到「已安装」页会重新扫描，能看到最新结果。
     </p>

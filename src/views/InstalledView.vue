@@ -26,6 +26,7 @@ import AppTable from "../components/ui/AppTable.vue";
 import AppTag from "../components/ui/AppTag.vue";
 import StatusBadge from "../components/ui/StatusBadge.vue";
 import ActionPanel from "../components/ActionPanel.vue";
+import { onActionSettled, type ActionSession } from "../composables/useActionSessions";
 import { readInstalledCache, SIZE_TTL_MS, writeInstalledCache } from "../composables/useInstalledCache";
 import { useSettings } from "../composables/useSettings";
 import { isTauri } from "../lib/tauri";
@@ -408,8 +409,18 @@ watch(selected, () => {
   openError.value = null;
 });
 
-async function onActionFinished(code: number | null) {
-  if (code !== 0) return;
+/**
+ * 任务结束的通知来自会话层，不走面板的 emit：面板随选中项挂载销毁，
+ * 用户可能在别的包、甚至别的页面上等它跑完，那时 emit 根本发不出来。
+ */
+onActionSettled((session) => {
+  void onActionFinished(session);
+});
+
+async function onActionFinished(session: ActionSession) {
+  if (session.exitCode !== 0) return;
+  // 别的生态页发起的任务（例如在 Homebrew 页看的是 brew 包）与本页采集无关
+  if (!SOURCES[props.scope].includes(session.target.source)) return;
   // 给包管理器一点落盘时间再重扫，否则可能读到旧状态
   await new Promise((resolve) => setTimeout(resolve, 800));
   // 后台更新：保留当前列表与选中项，避免详情面板突然收起
@@ -647,7 +658,6 @@ onMounted(() => {
           :version="upgradeVersion"
           :kind="selected.kind"
           :upgrade-available="newerVersion(selected) !== null"
-          @finished="onActionFinished"
         />
       </div>
     </AppDetailPane>
