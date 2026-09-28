@@ -7,6 +7,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 
+// 版本号只有 package.json 一份出处：Tauri 打包也从它读（tauri.conf.json 里写的是路径）
+import { version as appVersion } from "../package.json";
 import AppSidebar from "./components/AppSidebar.vue";
 import CommandPalette from "./components/CommandPalette.vue";
 import ThemeSwitcher from "./components/ThemeSwitcher.vue";
@@ -109,7 +111,7 @@ watch(groups, (list) => {
         <AppSidebar :groups="groups" :current="current" @select="current = $event" class="pt-2" />
 
         <div class="mt-auto border-t border-border px-3 py-2">
-          <p class="font-mono text-caption text-muted-foreground">v0.1.0 · alpha</p>
+          <p class="font-mono text-caption text-muted-foreground">v{{ appVersion }} · alpha</p>
         </div>
       </aside>
 
