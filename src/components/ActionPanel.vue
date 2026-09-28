@@ -16,6 +16,7 @@ import StatusBadge from "./ui/StatusBadge.vue";
 import {
   actionSession,
   cancelAction,
+  dismissSession,
   startAction,
   type ActionTarget,
 } from "../composables/useActionSessions";
@@ -99,6 +100,11 @@ function cancel() {
   void cancelAction(session.value);
 }
 
+/** 结果看过了：清掉这次输出与状态，面板回到"待执行" */
+function dismiss() {
+  dismissSession(session.value);
+}
+
 function onWindowKey(event: KeyboardEvent) {
   if (confirming.value && event.key === "Escape") confirming.value = false;
 }
@@ -145,6 +151,9 @@ useScrollLock(confirming);
             {{ action === "uninstall" ? "执行卸载" : "执行升级" }}
           </AppButton>
         </template>
+
+        <!-- 结果看过了就收起来：日志只在用户还需要它的时候占着位置 -->
+        <AppButton v-if="session.finished && !session.running" @click="dismiss">清除日志</AppButton>
       </div>
     </div>
 

@@ -194,3 +194,15 @@ export async function cancelAction(session: ActionSession): Promise<void> {
   if (!session.taskId) return;
   await invoke<boolean>("cancel_command", { id: session.taskId });
 }
+
+/**
+ * 手动清除一次执行结果（日志与状态），面板回到"待执行"。
+ *
+ * 刻意不做自动清理：日志是判断"到底装没装上"的唯一依据，什么时候不再需要由用户决定。
+ * 正在执行的不给清——输出还在往里写。
+ */
+export function dismissSession(session: ActionSession) {
+  if (session.running) return;
+  sessions.delete(session.key);
+  reset(session, null);
+}
