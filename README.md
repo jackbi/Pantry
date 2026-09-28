@@ -1,4 +1,6 @@
-# Pantry
+<h1 align="center">
+  <img src="design-system/pantry/logo.png" alt="Pantry" width="240" />
+</h1>
 
 macOS 桌面版包管理器 GUI：把 npm 生态（npm / pnpm / bun / deno）的全局包与 Homebrew 的 formula / cask 收进一个界面，查看、搜索、安装。
 

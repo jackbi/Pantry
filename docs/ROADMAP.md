@@ -217,7 +217,8 @@
 - [ ] 错误兜底：管理器未安装、网络失败、权限不足分别给出明确的成因与恢复路径
 - [ ] 打包分发：macOS 签名与公证需要 Apple Developer 账号，提前预留
 - [x] 产品命名：**Pantry**（`productName: Pantry` / `identifier: com.hengran.pantry` / 窗口标题 `Pantry` / 侧栏字标 `./pantry` / `design-system/pantry/` / 发往 registry 的 user agent `pantry/0.1`）。**刻意不变**的内部标识：crate 与二进制名 `hengran-public-store`、`package.json` 的 `name`、仓库目录名、`localStorage` 前缀 `public-store:*`、shell_env 哨兵串——它们对用户不可见，改了还会丢设置与缓存、并让 ROADMAP 里那条 `--diagnose` 实测记录失效
-- [ ] 应用图标、版本号（仍为 0.1.0；图标还是 Tauri 默认图标）
+- [x] 应用图标换成 Pantry 橱柜图形（npm / pnpm / bun / Deno / Homebrew 摆在架子上）：母版 `design-system/pantry/app-icon.png`，`src-tauri/icons/` 由 `pnpm tauri icon <母版>` 生成，别再手改；浏览器预览的标签页图标也换掉了（原来还是 Vite 的）
+- [ ] 版本号：仍为 0.1.0
 
 ### 设置项的作用范围（已固化）
 

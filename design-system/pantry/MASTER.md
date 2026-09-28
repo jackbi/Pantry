@@ -136,6 +136,23 @@
 | `label-mini` | 11px / 500 / 0.06em / muted | 分组标题、表头、面板小标题 |
 | `tokenFont()` | `src/lib/text.ts` | 拉丁与数字返回 `font-mono`，含中文返回空串——等宽只用于拉丁，别对中文标签套等宽 |
 
+## 品牌资产
+
+| 文件 | 用途 |
+|------|------|
+| `design-system/pantry/logo.png` | 完整锁定版（橱柜图形 + Pantry 字标），给文档与对外介绍用 |
+| `design-system/pantry/app-icon.png` | 应用图标母版（1024²，透明底）：图形占 87.5%、连续圆角 22.37% |
+| `public/favicon.png` | 浏览器预览的标签页图标（128²，由母版缩小） |
+
+那两个比例是照系统应用实测的（Calculator / Terminal / App Store 的 `.icns` 里，图形都占画布 87.5%），
+不是估的——图标别自己重画，`src-tauri/icons/` 里整套都从母版生成：
+
+```bash
+pnpm tauri icon design-system/pantry/app-icon.png
+```
+
+这条命令会顺带产出 `icons/ios/`、`icons/android/`，桌面项目用不到，删掉即可（下次再跑还会生成）。
+
 ## 反模式（禁止）
 
 - 组件里硬编码 hex 或 `bg-slate-800` 这类调色板类名，绕过语义 token
