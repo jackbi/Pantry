@@ -18,8 +18,12 @@ pnpm install        # 安装依赖
 pnpm dev            # 启动 Vite 开发服务器（固定端口 1420）
 pnpm build          # vue-tsc 类型检查 + vite build，产物在 dist/
 pnpm tauri:dev      # 启动桌面应用（自动拉起 pnpm dev）
-pnpm tauri build    # 打包桌面安装包
+pnpm tauri:build    # 打包桌面安装包（release 构建较慢）
+pnpm test           # 后端单测（等价于 cd src-tauri && cargo test）
+pnpm check          # pnpm build + pnpm test：提交前跑这一条
 ```
+
+其它 tauri 子命令走 `pnpm tauri <subcommand>`（如 `pnpm tauri info`、`pnpm tauri icon`）。
 
 ## 代码风格与命名约定
 
@@ -39,7 +43,7 @@ cargo test                          # 单测：不联网，也不会安装 / 卸
 cargo test -- --ignored --nocapture # 真机测试：会真的调用本机命令（只读）
 ```
 
-PR 前的最低验证标准：`pnpm build` 类型检查通过 + `cargo test` 全绿，改到界面时手动跑一遍 `pnpm tauri:dev`。
+根目录的 `pnpm test` 就是第一条的快捷方式。PR 前的最低验证标准：`pnpm check`（类型检查 + 单测）全绿，改到界面时手动跑一遍 `pnpm tauri:dev`。
 若引入前端测试，请使用 Vitest，文件命名 `*.spec.ts`，与源码同目录或置于 `src/**/__tests__/`。
 
 ## 提交与 PR 规范

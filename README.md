@@ -33,10 +33,12 @@ macOS 桌面版包管理器 GUI：把 npm 生态（npm / pnpm / bun / deno）的
 ```bash
 pnpm install
 
-pnpm tauri:dev   # 启动桌面应用（自动拉起前端 dev server，端口固定 1420）
-pnpm dev         # 只跑前端：浏览器里调样式，Tauri 命令不可用
-pnpm build       # vue-tsc 类型检查 + vite build —— 提交前必须通过
-pnpm tauri build # 打包桌面安装包（尚未在本机验证过产物）
+pnpm tauri:dev    # 启动桌面应用（自动拉起前端 dev server，端口固定 1420）
+pnpm tauri:build  # 打包桌面安装包（release 构建，首次较慢）
+pnpm dev          # 只跑前端：浏览器里调样式，Tauri 命令不可用
+pnpm build        # vue-tsc 类型检查 + vite build —— 提交前必须通过
+pnpm test         # 后端单测，等价于 cd src-tauri && cargo test
+pnpm check        # pnpm build + pnpm test：提交前跑这一条
 ```
 
 后端：
