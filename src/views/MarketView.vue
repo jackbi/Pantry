@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import AppButton from "../components/ui/AppButton.vue";
 import AppDetailPane from "../components/ui/AppDetailPane.vue";
+import AppExternalLink from "../components/ui/AppExternalLink.vue";
 import AppEmptyState from "../components/ui/AppEmptyState.vue";
 import AppSearchField from "../components/ui/AppSearchField.vue";
 import AppSparkline from "../components/ui/AppSparkline.vue";
@@ -53,6 +54,8 @@ const selected = ref<SearchHit | null>(null);
 const detail = ref<PackageDetail | null>(null);
 const detailLoading = ref(false);
 const detailError = ref<string | null>(null);
+/** 主页 / 仓库外链没打开成功时的说明 */
+const openError = ref<string | null>(null);
 
 const readme = ref<ReadmeResponse | null>(null);
 const readmeLoading = ref(false);
@@ -172,10 +175,16 @@ async function search(more: boolean) {
   }
 }
 
+/** 主页 / 仓库外链没打开成功时如实说明 */
+function onLinkFailed(message: string) {
+  openError.value = message;
+}
+
 async function select(hit: SearchHit) {
   selected.value = hit;
   detail.value = null;
   detailError.value = null;
+  openError.value = null;
   readme.value = null;
   readmeError.value = null;
   history.value = null;
@@ -431,14 +440,28 @@ useScrollLock(readmeOpen);
 
           <template v-if="detail?.homepage">
             <dt class="text-muted-foreground">主页</dt>
-            <dd class="wrap-token font-mono text-accent">{{ detail.homepage }}</dd>
+            <dd>
+              <AppExternalLink
+                :url="detail.homepage"
+                :window-title="`${selected.name} · 主页`"
+                @failed="onLinkFailed"
+              />
+            </dd>
           </template>
 
           <template v-if="detail?.repository">
             <dt class="text-muted-foreground">仓库</dt>
-            <dd class="wrap-token font-mono text-accent">{{ detail.repository }}</dd>
+            <dd>
+              <AppExternalLink
+                :url="detail.repository"
+                :window-title="`${selected.name} · 仓库`"
+                @failed="onLinkFailed"
+              />
+            </dd>
           </template>
         </dl>
+
+        <p v-if="openError" class="mt-3 wrap-token text-danger" role="alert">{{ openError }}</p>
 
         <!-- 版本历史与 npm 官网对齐：版本数、当前标签、每个版本的发布时间与近一周下载量 -->
         <div class="border-t border-border pt-3">

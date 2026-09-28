@@ -244,6 +244,16 @@
 - [x] **「恢复默认」改为只改草稿**：不再绕过「保存设置」直接写 localStorage，误点不会悄悄覆盖已保存的配置；草稿已是默认值时按钮置灰（判断要把证书开关算进去，否则「只打开了开关」那种状态下按钮会点了没反应）
 - [x] **`AppSwitch` 整行可点**：原来只有滑块与「开 / 关」文字是点击目标，标题与说明点了没反应（注释却写着整行可点）。现在整行是**一个** `button`（不嵌套按钮），标题与说明分别用 `aria-labelledby` / `aria-describedby` 关联
 
+### 外链与包元数据（本轮）
+
+- [x] **主页 / 仓库可直接点开**：详情里的地址不再是纯文本。点击在**应用内**开一扇独立窗口（`open_external_url` → `WebviewWindowBuilder` + `WebviewUrl::External`），已有链接窗口就复用导航，不会每点一个链接开一扇新窗
+- **为什么不用子 webview / iframe**：Tauri 的 multiwebview 还在 `unstable` 特性后面；iframe 会被 `X-Frame-Options` 挡掉（GitHub 与 npmjs 都挡）
+- **安全边界（改这里前先读这条）**：命令只放行 `http` / `https`，`file:` 与自定义 scheme 一律拒绝；链接窗口的 label 固定为 `link`，而 `capabilities/default.json` 的 `windows` 只列了 `main` —— 远端页面因此拿不到本应用的 IPC，只能被动浏览。**换 label 或放宽 windows 列表前必须重新评估这一点**
+- [x] **已安装包补上说明 / 主页 / 仓库**：npm 系的列表命令只返回名字与版本，这三项改为读各包自己的 `package.json`（本机 46 个包毫秒级，且不依赖 registry 可达性）；deno 的全局目录里没有 package.json，所以它没有这三项。brew 的 JSON 没有 repository 字段，取 `urls.head`，且只在"看起来像仓库"时才算（以 `.git` 结尾或落在常见代码托管站）——本机实测 113 个 brew 包里 52 个有仓库地址
+- [x] **地址归一化收进 `src-tauri/src/links.rs`**：`git+https://…`、`{type,url}` 对象、`github:user/repo`、`git@github.com:user/repo.git` 统一转成能点开的 `https://…`；转不成的一律不显示，界面不给点了没反应的链接
+- [x] **市场页与 Homebrew 页详情同步可点**（原来只有已安装详情有主页，且是纯文本）
+- [x] **窗口行为有测试**：在 `tauri::test` 的 mock 运行时下真的跑一遍「建窗 → 复用同一扇窗」与「只放行 http/https」，不依赖人工点击
+
 ## 建议落地顺序
 
 先打通最小闭环：**npm 与 pnpm 已装列表 → npmmirror 搜索 → 选择管理器安装 → 流式日志**。这条链路同时验证 PATH、网络、子进程三个难点。随后补 Tailwind 与双主题基建，再扩展 bun 与 deno，brew 放最后（涉及 sudo 与慢速更新）。

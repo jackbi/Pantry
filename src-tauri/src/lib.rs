@@ -4,6 +4,7 @@
 
 mod actions;
 mod brew;
+mod links;
 mod managers;
 mod probe;
 mod market;
@@ -204,6 +205,67 @@ async fn brew_detail(
 #[tauri::command]
 fn open_local_target(path: String, mode: String) -> Result<String, String> {
     actions::open_target(&path, actions::OpenMode::parse(&mode)?)
+}
+
+/// 外链窗口的 label：固定一个，连点几个链接时是复用同一个窗口，而不是开一堆。
+const LINK_WINDOW: &str = "link";
+
+/// 在应用内的独立窗口里打开外链（主页 / 仓库）。
+///
+/// 用独立窗口而不是子 webview 或 iframe：Tauri 的 multiwebview 还在 `unstable` 特性后面，
+/// 而窗口是稳定 API，行为也更好预期。安全边界靠两件事兜住——这里只放行 http/https；
+/// 新窗口的 label 不在任何 capability 的 windows 列表里（见 capabilities/default.json），
+/// 因此远端页面拿不到本应用的 IPC，只能被动浏览。
+#[tauri::command]
+async fn open_external_url(app: AppHandle, url: String, title: Option<String>) -> Result<(), String> {
+    let parsed = link_target(&url)?;
+    let title = link_title(title.as_deref(), &parsed);
+    show_link_window(&app, parsed, title)
+}
+
+/// 只放行 http/https：其余（`file:`、自定义 scheme）一律拒绝，
+/// 免得"打开外链"变成任意本地文件或任意协议的入口。
+fn link_target(raw: &str) -> Result<tauri::Url, String> {
+    let parsed = tauri::Url::parse(raw.trim()).map_err(|error| format!("链接不是合法 URL：{error}"))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(format!(
+            "只允许打开 http/https 链接（收到 {}）",
+            parsed.scheme()
+        ));
+    }
+    Ok(parsed)
+}
+
+/// 窗口标题：调用方给什么用什么（如「vite · 仓库」），没给就用域名。
+fn link_title(title: Option<&str>, url: &tauri::Url) -> String {
+    title
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| url.host_str().unwrap_or("链接").to_string())
+}
+
+/// 建窗或复用：已经有链接窗口就导航过去，而不是每点一个链接开一扇新窗。
+///
+/// 抽成对运行时泛型是为了能被测试覆盖——`tauri::test` 的 mock 运行时能真的走一遍建窗
+/// 与复用，只是不渲染页面。
+fn show_link_window<R: tauri::Runtime, M: tauri::Manager<R>>(
+    manager: &M,
+    url: tauri::Url,
+    title: String,
+) -> Result<(), String> {
+    if let Some(window) = manager.get_webview_window(LINK_WINDOW) {
+        window.navigate(url).map_err(|error| error.to_string())?;
+        let _ = window.set_title(&title);
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    tauri::WebviewWindowBuilder::new(manager, LINK_WINDOW, tauri::WebviewUrl::External(url))
+        .title(title)
+        .inner_size(1100.0, 820.0)
+        .build()
+        .map_err(|error| format!("打开链接窗口失败：{error}"))?;
+    Ok(())
 }
 
 /// 近 30 天安装次数（Homebrew 官方统计，仅 formula）。单独命令，避免第三方统计拖慢详情。
@@ -413,6 +475,7 @@ pub fn run() {
             brew_search,
             brew_detail,
             open_local_target,
+            open_external_url,
             brew_stats,
             brew_availability,
             manager_status,
@@ -469,5 +532,58 @@ pub fn diagnose_cli() -> i32 {
             eprintln!("自检结果序列化失败：{error}");
             1
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tauri::Manager;
+
+    fn mock_app() -> tauri::App<tauri::test::MockRuntime> {
+        tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("mock app 应能建起来")
+    }
+
+    /// 只放行 http/https：`file:` 之类不能借"打开外链"之名被打开。
+    #[test]
+    fn link_target_only_accepts_http() {
+        assert_eq!(
+            link_target(" https://vite.dev/ ").unwrap().as_str(),
+            "https://vite.dev/"
+        );
+        assert!(link_target("http://example.com").is_ok());
+
+        for raw in ["file:///etc/passwd", "javascript:alert(1)", "vscode://x", ""] {
+            assert!(link_target(raw).is_err(), "{raw} 不该被放行");
+        }
+    }
+
+    #[test]
+    fn link_title_falls_back_to_host() {
+        let url = tauri::Url::parse("https://github.com/vitejs/vite").unwrap();
+        assert_eq!(link_title(Some(" vite · 仓库 "), &url), "vite · 仓库");
+        // 没给标题、或只给了空白，就用域名兜底
+        assert_eq!(link_title(None, &url), "github.com");
+        assert_eq!(link_title(Some("   "), &url), "github.com");
+    }
+
+    /// 真建窗：走一遍「建窗 → 再点一个链接时复用同一扇窗」。
+    /// mock 运行时不渲染页面，但窗口创建与复用这条链路是真的被执行了。
+    #[test]
+    fn link_window_is_created_once_then_reused() {
+        let app = mock_app();
+        let repo = tauri::Url::parse("https://github.com/vitejs/vite").unwrap();
+        show_link_window(&app, repo, "vite · 仓库".to_string()).expect("应能建出链接窗口");
+        assert!(
+            app.get_webview_window(LINK_WINDOW).is_some(),
+            "链接窗口应存在"
+        );
+
+        // mock 运行时不会真的导航，标题也不回读，但"已有窗口就复用"这条分支确实被走到了
+        let home = tauri::Url::parse("https://vite.dev").unwrap();
+        show_link_window(&app, home, "vite · 主页".to_string()).expect("应能复用链接窗口");
+        assert_eq!(app.webview_windows().len(), 1, "不该再多开一扇窗");
     }
 }

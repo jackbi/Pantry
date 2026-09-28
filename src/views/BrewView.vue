@@ -19,6 +19,7 @@ import { invoke } from "@tauri-apps/api/core";
 import AppButton from "../components/ui/AppButton.vue";
 import AppDetailPane from "../components/ui/AppDetailPane.vue";
 import AppEmptyState from "../components/ui/AppEmptyState.vue";
+import AppExternalLink from "../components/ui/AppExternalLink.vue";
 import AppSearchField from "../components/ui/AppSearchField.vue";
 import AppTag from "../components/ui/AppTag.vue";
 import StatusBadge from "../components/ui/StatusBadge.vue";
@@ -159,6 +160,11 @@ async function loadStats(name: string) {
   } finally {
     if (selected.value?.name === name) statsLoading.value = false;
   }
+}
+
+/** 主页 / 仓库外链没打开成功时如实说明，与「打开应用」共用一条提示 */
+function onLinkFailed(message: string) {
+  notice.value = message;
 }
 
 async function openTarget(mode: "open" | "reveal") {
@@ -382,7 +388,24 @@ function onKeydown(event: KeyboardEvent) {
 
               <template v-if="detail?.homepage">
                 <dt class="text-muted-foreground">主页</dt>
-                <dd class="wrap-token font-mono text-accent">{{ detail.homepage }}</dd>
+                <dd>
+                  <AppExternalLink
+                    :url="detail.homepage"
+                    :window-title="`${detail.name} · 主页`"
+                    @failed="onLinkFailed"
+                  />
+                </dd>
+              </template>
+
+              <template v-if="detail?.repository">
+                <dt class="text-muted-foreground">仓库</dt>
+                <dd>
+                  <AppExternalLink
+                    :url="detail.repository"
+                    :window-title="`${detail.name} · 仓库`"
+                    @failed="onLinkFailed"
+                  />
+                </dd>
               </template>
 
               <template v-if="detail?.tap">

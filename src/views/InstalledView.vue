@@ -21,6 +21,7 @@ import { invoke } from "@tauri-apps/api/core";
 import AppButton from "../components/ui/AppButton.vue";
 import AppDetailPane from "../components/ui/AppDetailPane.vue";
 import AppEmptyState from "../components/ui/AppEmptyState.vue";
+import AppExternalLink from "../components/ui/AppExternalLink.vue";
 import AppSearchField from "../components/ui/AppSearchField.vue";
 import AppTable from "../components/ui/AppTable.vue";
 import AppTag from "../components/ui/AppTag.vue";
@@ -427,6 +428,11 @@ async function onActionFinished(session: ActionSession) {
   await load({ background: true });
 }
 
+/** 外链没打开成功时（地址不是 http/https、窗口建不起来）如实说明，与 cask 共用一条报错 */
+function onLinkFailed(message: string) {
+  openError.value = message;
+}
+
 /** 打开 cask 应用 / 在访达中显示。路径来自扫描结果，Rust 侧仍会做存在性校验。 */
 async function openTarget(mode: "open" | "reveal") {
   const path = selected.value?.appPath;
@@ -607,9 +613,28 @@ onMounted(() => {
 
         <template v-if="selected.homepage">
           <dt class="text-muted-foreground">主页</dt>
-          <dd class="wrap-token font-mono text-accent">{{ selected.homepage }}</dd>
+          <dd>
+            <AppExternalLink
+              :url="selected.homepage"
+              :window-title="`${selected.name} · 主页`"
+              @failed="onLinkFailed"
+            />
+          </dd>
+        </template>
+
+        <template v-if="selected.repository">
+          <dt class="text-muted-foreground">仓库</dt>
+          <dd>
+            <AppExternalLink
+              :url="selected.repository"
+              :window-title="`${selected.name} · 仓库`"
+              @failed="onLinkFailed"
+            />
+          </dd>
         </template>
       </dl>
+
+      <p v-if="openError" class="mt-3 wrap-token text-danger" role="alert">{{ openError }}</p>
 
       <!-- cask 是 GUI 应用，装完就该能直接打开，而不是让人自己去 /Applications 里找 -->
       <div v-if="selected?.appPath" class="mt-3 border-t border-border pt-3">
@@ -625,7 +650,6 @@ onMounted(() => {
           </AppButton>
         </div>
         <p class="wrap-token font-mono text-caption text-muted-foreground">{{ selected.appPath }}</p>
-        <p v-if="openError" class="mt-2 wrap-token text-danger" role="alert">{{ openError }}</p>
       </div>
 
       <p
