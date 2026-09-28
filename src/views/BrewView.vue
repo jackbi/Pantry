@@ -389,22 +389,14 @@ function onKeydown(event: KeyboardEvent) {
               <template v-if="detail?.homepage">
                 <dt class="text-muted-foreground">主页</dt>
                 <dd>
-                  <AppExternalLink
-                    :url="detail.homepage"
-                    :window-title="`${detail.name} · 主页`"
-                    @failed="onLinkFailed"
-                  />
+                  <AppExternalLink :url="detail.homepage" @failed="onLinkFailed" />
                 </dd>
               </template>
 
               <template v-if="detail?.repository">
                 <dt class="text-muted-foreground">仓库</dt>
                 <dd>
-                  <AppExternalLink
-                    :url="detail.repository"
-                    :window-title="`${detail.name} · 仓库`"
-                    @failed="onLinkFailed"
-                  />
+                  <AppExternalLink :url="detail.repository" @failed="onLinkFailed" />
                 </dd>
               </template>
 

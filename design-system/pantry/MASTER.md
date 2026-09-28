@@ -117,7 +117,7 @@
 | `AppTable` | `ui/AppTable.vue` | 密集表格，可排序表头带 `aria-sort`，粘性表头，行内操作插槽 |
 | `AppDetailPane` | `ui/AppDetailPane.vue` | 表格下方详情区，未选中时给空态 |
 | `AppEmptyState` | `ui/AppEmptyState.vue` | 空态：图标 + 标题 + 说明 + 操作 |
-| `AppExternalLink` | `ui/AppExternalLink.vue` | 主页 / 仓库外链：点开应用内的独立窗口（后端只放行 http(s)），窗口标题写成「包名 · 主页」 |
+| `AppExternalLink` | `ui/AppExternalLink.vue` | 主页 / 仓库外链：用系统默认浏览器打开（后端只放行 http(s)），失败把原因交回页面显示 |
 | `AppSearchField` | `ui/AppSearchField.vue` | `/` 前缀 + 键帽 + 提交按钮的搜索入口 |
 | `AppTag` | `ui/AppTag.vue` | 标签 / 筛选片，`•` 前缀，传 active 才渲染为按钮；包名等拉丁标签自动用等宽，中文标签用正文字体 |
 | `AppSwitch` | `ui/AppSwitch.vue` | 布尔开关，**整行可点**（标题、说明、滑块同属一个按钮，点哪都切换），`role="switch"` + `aria-labelledby/describedby` + 原生键盘行为；有风险的开关用 `tone="danger"`，滑块位置之外还有「开 / 关」文字 |

@@ -246,13 +246,12 @@
 
 ### 外链与包元数据（本轮）
 
-- [x] **主页 / 仓库可直接点开**：详情里的地址不再是纯文本。点击在**应用内**开一扇独立窗口（`open_external_url` → `WebviewWindowBuilder` + `WebviewUrl::External`），已有链接窗口就复用导航，不会每点一个链接开一扇新窗
-- **为什么不用子 webview / iframe**：Tauri 的 multiwebview 还在 `unstable` 特性后面；iframe 会被 `X-Frame-Options` 挡掉（GitHub 与 npmjs 都挡）
-- **安全边界（改这里前先读这条）**：命令只放行 `http` / `https`，`file:` 与自定义 scheme 一律拒绝；链接窗口的 label 固定为 `link`，而 `capabilities/default.json` 的 `windows` 只列了 `main` —— 远端页面因此拿不到本应用的 IPC，只能被动浏览。**换 label 或放宽 windows 列表前必须重新评估这一点**
+- [x] **主页 / 仓库可直接点开**：详情里的地址不再是纯文本，点击用**系统默认浏览器**打开（`open_external_url` → opener 插件）
+- **为什么不自建窗口（踩过一次）**：先做成了应用内的独立窗口（`WebviewWindowBuilder` + `WebviewUrl::External`），实测两个问题——那扇窗里没有用户的登录态，也用不上他自己配的代理与浏览器扩展，需要 VPN 或需要登录的站点（GitHub、npm 官网）直接打不开；而且它只是又一扇要管理的窗。系统浏览器才是用户已经配好的环境，代理、登录、多标签都在。子 webview 与 iframe 更早就被排除了：multiwebview 还在 `unstable` 特性后面，iframe 会被 `X-Frame-Options` 挡掉
+- **安全边界**：命令只放行 `http` / `https`，`file:` 与自定义 scheme 一律拒绝，免得"打开外链"变成任意本地文件或任意协议的入口（`link_target` 有单测）
 - [x] **已安装包补上说明 / 主页 / 仓库**：npm 系的列表命令只返回名字与版本，这三项改为读各包自己的 `package.json`（本机 46 个包毫秒级，且不依赖 registry 可达性）；deno 的全局目录里没有 package.json，所以它没有这三项。brew 的 JSON 没有 repository 字段，取 `urls.head`，且只在"看起来像仓库"时才算（以 `.git` 结尾或落在常见代码托管站）——本机实测 113 个 brew 包里 52 个有仓库地址
 - [x] **地址归一化收进 `src-tauri/src/links.rs`**：`git+https://…`、`{type,url}` 对象、`github:user/repo`、`git@github.com:user/repo.git` 统一转成能点开的 `https://…`；转不成的一律不显示，界面不给点了没反应的链接
 - [x] **市场页与 Homebrew 页详情同步可点**（原来只有已安装详情有主页，且是纯文本）
-- [x] **窗口行为有测试**：在 `tauri::test` 的 mock 运行时下真的跑一遍「建窗 → 复用同一扇窗」与「只放行 http/https」，不依赖人工点击
 
 ## 建议落地顺序
 

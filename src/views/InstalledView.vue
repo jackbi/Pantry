@@ -614,22 +614,14 @@ onMounted(() => {
         <template v-if="selected.homepage">
           <dt class="text-muted-foreground">主页</dt>
           <dd>
-            <AppExternalLink
-              :url="selected.homepage"
-              :window-title="`${selected.name} · 主页`"
-              @failed="onLinkFailed"
-            />
+            <AppExternalLink :url="selected.homepage" @failed="onLinkFailed" />
           </dd>
         </template>
 
         <template v-if="selected.repository">
           <dt class="text-muted-foreground">仓库</dt>
           <dd>
-            <AppExternalLink
-              :url="selected.repository"
-              :window-title="`${selected.name} · 仓库`"
-              @failed="onLinkFailed"
-            />
+            <AppExternalLink :url="selected.repository" @failed="onLinkFailed" />
           </dd>
         </template>
       </dl>

@@ -26,11 +26,6 @@ serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "gzip"] }
 libc = "0.2"
 
-[dev-dependencies]
-# 让 tauri::test 可用：窗口这类"必须有真 app 才能跑"的代码靠 mock 运行时覆盖
-tauri = { version = "2", features = ["test"] }
-
-
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1
