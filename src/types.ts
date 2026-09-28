@@ -24,6 +24,8 @@ export type InstalledPackage = {
   source: string;
   description: string | null;
   homepage: string | null;
+  /** 源码仓库地址，取不到就是 null；有值才在详情里显示成可点击外链 */
+  repository: string | null;
   kind: string | null;
   path: string | null;
   /** cask 安装出来的 .app 路径，用于「打开」与「在访达中显示」 */
@@ -82,6 +84,8 @@ export type BrewDetail = {
   version: string | null;
   description: string | null;
   homepage: string | null;
+  /** 上游源码仓库；npm 系读包自己的 package.json，brew 取 urls.head，取不到为 null */
+  repository: string | null;
   license: string | null;
   tap: string | null;
   installed: string | null;

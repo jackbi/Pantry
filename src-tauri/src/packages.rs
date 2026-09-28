@@ -29,6 +29,8 @@ pub struct InstalledPackage {
     pub source: String,
     pub description: Option<String>,
     pub homepage: Option<String>,
+    /// 源码仓库地址，界面里做成可点击的外链；取不到时为 None
+    pub repository: Option<String>,
     /// brew 的 formula / cask，其他来源为 None
     pub kind: Option<String>,
     pub path: Option<String>,
@@ -126,6 +128,7 @@ pub fn parse_npm(json: &str) -> Result<Vec<InstalledPackage>, String> {
             source: "npm".to_string(),
             description: None,
             homepage: None,
+            repository: None,
             kind: None,
             path: Some(root.npm.join(name).display().to_string()),
             app_path: None,
@@ -163,6 +166,7 @@ pub fn parse_pnpm(json: &str) -> Result<Vec<InstalledPackage>, String> {
                 source: "pnpm".to_string(),
                 description: None,
                 homepage: None,
+                repository: None,
                 kind: None,
                 path: info
                     .get("path")
@@ -211,6 +215,7 @@ pub fn parse_bun(text: &str) -> Vec<InstalledPackage> {
             source: "bun".to_string(),
             description: None,
             homepage: None,
+            repository: None,
             kind: None,
             path: Some(root.join("node_modules").join(name).display().to_string()),
             app_path: None,
@@ -246,6 +251,7 @@ pub fn scan_deno_bin() -> Vec<InstalledPackage> {
             source: "deno".to_string(),
             description: None,
             homepage: None,
+            repository: None,
             kind: None,
             path: Some(path.display().to_string()),
             app_path: None,
@@ -311,6 +317,7 @@ pub fn parse_brew(json: &str) -> Result<Vec<InstalledPackage>, String> {
                 .and_then(|node| node.as_str())
                 .map(str::to_string),
             kind: Some("formula".to_string()),
+            repository: crate::brew::repository_of(&item),
             path: cellar
                 .as_ref()
                 .map(|base| base.join(name).display().to_string()),
@@ -361,6 +368,8 @@ pub fn parse_brew(json: &str) -> Result<Vec<InstalledPackage>, String> {
                 .and_then(|node| node.as_str())
                 .map(str::to_string),
             kind: Some("cask".to_string()),
+            // cask 的 JSON 只有下载地址，没有源码仓库；主页通常就是仓库，不再猜
+            repository: None,
             path: app_path.clone(),
             app_path,
             outdated,
@@ -405,6 +414,83 @@ impl Paths {
 }
 
 // -------------------------------------------------------------------- 采集
+
+// ------------------------------------------------------------ 元数据补全
+
+/// 包自己 package.json 里的三项元数据。
+#[derive(Debug, Default, PartialEq)]
+struct PackageMeta {
+    description: Option<String>,
+    homepage: Option<String>,
+    repository: Option<String>,
+}
+
+/// npm ls / pnpm ls / bun pm ls 的默认输出只有名字和版本，说明、主页、仓库都只存在于
+/// 各个包自己的 package.json 里。与其再跑一次带元数据的命令（还可能联网），不如直接读
+/// 本机这几十个小文件：真机上 46 个包读一轮是毫秒级，也不受 registry 可达性影响。
+///
+/// deno 的全局安装目录里没有 package.json，所以它补不上这三项，界面自然不显示。
+fn enrich_local_metadata(packages: &mut [InstalledPackage]) {
+    for package in packages.iter_mut() {
+        // brew 的三项来自 `brew info --json=v2`，Cellar 里没有 package.json
+        if package.source == "brew" {
+            continue;
+        }
+        if package.description.is_some() && package.homepage.is_some() && package.repository.is_some() {
+            continue;
+        }
+        let Some(path) = package.path.as_deref() else {
+            continue;
+        };
+        let Some(meta) = read_package_meta(std::path::Path::new(path)) else {
+            continue;
+        };
+        if package.description.is_none() {
+            package.description = meta.description;
+        }
+        if package.homepage.is_none() {
+            package.homepage = meta.homepage;
+        }
+        if package.repository.is_none() {
+            package.repository = meta.repository;
+        }
+    }
+}
+
+fn read_package_meta(dir: &std::path::Path) -> Option<PackageMeta> {
+    let text = std::fs::read_to_string(dir.join("package.json")).ok()?;
+    Some(parse_package_meta(&text))
+}
+
+fn parse_package_meta(json: &str) -> PackageMeta {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(json) else {
+        return PackageMeta::default();
+    };
+    PackageMeta {
+        description: text_field(&value, "description"),
+        homepage: text_field(&value, "homepage").and_then(|url| crate::links::web_url(&url)),
+        repository: value.get("repository").and_then(repository_url),
+    }
+}
+
+fn text_field(value: &serde_json::Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(|node| node.as_str())
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(str::to_string)
+}
+
+/// package.json 里的 repository 既可能是字符串，也可能是 `{ type, url }`。
+fn repository_url(node: &serde_json::Value) -> Option<String> {
+    let raw = node.as_str().map(str::to_string).or_else(|| {
+        node.get("url")
+            .and_then(|inner| inner.as_str())
+            .map(str::to_string)
+    })?;
+    crate::links::web_url(&raw)
+}
 
 /// 并行采集全部来源；单个来源失败只记录错误，不影响其余来源。
 ///
@@ -472,6 +558,8 @@ pub fn scan_all(sources: Option<Vec<String>>) -> InstalledReport {
             }),
         }
     }
+    // 列表命令不给元数据，读各包自己的 package.json 补上（说明 / 主页 / 仓库）
+    enrich_local_metadata(&mut packages);
     packages.sort_by(|left, right| {
         left.source
             .cmp(&right.source)
@@ -770,5 +858,102 @@ mod tests {
         }
         assert!(!paths.is_empty(), "应至少有三个 brew 包路径");
         assert!(!sizes.is_empty(), "du 应至少测出一个体积");
+    }
+
+    /// package.json 里 repository 的四种写法都要收敛成能点开的地址；
+    /// 点不开的（相对路径、只有 type 没有 url）宁可不给——界面上那一行要做成外链。
+    #[test]
+    fn normalizes_repository_urls() {
+        let cases = [
+            (
+                r#"{"repository":"git+https://github.com/a/b.git"}"#,
+                "https://github.com/a/b",
+            ),
+            (
+                r#"{"repository":{"type":"git","url":"git+https://github.com/a/b.git"}}"#,
+                "https://github.com/a/b",
+            ),
+            (r#"{"repository":"github:a/b"}"#, "https://github.com/a/b"),
+            (
+                r#"{"repository":"git@github.com:a/b.git"}"#,
+                "https://github.com/a/b",
+            ),
+        ];
+        for (json, expected) in cases {
+            assert_eq!(
+                parse_package_meta(json).repository.as_deref(),
+                Some(expected),
+                "{json}"
+            );
+        }
+
+        assert_eq!(parse_package_meta(r#"{"repository":"../local"}"#).repository, None);
+        assert_eq!(parse_package_meta(r#"{"repository":{"type":"git"}}"#).repository, None);
+    }
+
+    #[test]
+    fn reads_description_and_homepage_from_package_json() {
+        let meta = parse_package_meta(
+            r#"{"description":"  构建工具  ","homepage":"https://vite.dev/","repository":"https://github.com/vitejs/vite"}"#,
+        );
+        assert_eq!(meta.description.as_deref(), Some("构建工具"));
+        assert_eq!(meta.homepage.as_deref(), Some("https://vite.dev"));
+        assert_eq!(meta.repository.as_deref(), Some("https://github.com/vitejs/vite"));
+
+        // 坏 JSON 不该让采集炸掉，只是没有这几项；空白串同样当作没有
+        assert_eq!(parse_package_meta("<html>").description, None);
+        assert_eq!(parse_package_meta("{}").homepage, None);
+        assert_eq!(parse_package_meta(r#"{"description":"  "}"#).description, None);
+    }
+
+    /// brew 的 JSON 没有 repository 字段，只能从 `urls.head` 推；但它有时是压缩包地址，
+    /// 那种情况不能当成仓库摆到界面上。
+    #[test]
+    fn brew_repository_only_from_repo_like_head() {
+        let repo = r#"{"formulae":[{"name":"rg","versions":{"stable":"15.0.0"},"urls":{"head":{"url":"https://github.com/BurntSushi/ripgrep.git"}}}]}"#;
+        assert_eq!(
+            parse_brew(repo).unwrap()[0].repository.as_deref(),
+            Some("https://github.com/BurntSushi/ripgrep")
+        );
+
+        let tarball = r#"{"formulae":[{"name":"rg","versions":{"stable":"15.0.0"},"urls":{"head":{"url":"https://example.com/rg-15.0.0.tar.gz"}}}]}"#;
+        assert_eq!(parse_brew(tarball).unwrap()[0].repository, None);
+
+        // 没有 head 的 formula（多数发版式 formula 都这样）就是没有
+        let plain = r#"{"formulae":[{"name":"rg","versions":{"stable":"15.0.0"}}]}"#;
+        assert_eq!(parse_brew(plain).unwrap()[0].repository, None);
+    }
+
+    /// 真机验证：`cargo test -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn real_metadata_enriched() {
+        let npm = scan_all(Some(vec!["npm".to_string()]));
+        for package in npm.packages.iter().take(5) {
+            println!(
+                "{} {} · 说明 {} · 主页 {:?} · 仓库 {:?}",
+                package.source,
+                package.name,
+                package.description.is_some(),
+                package.homepage,
+                package.repository
+            );
+        }
+        assert!(
+            npm.packages.iter().any(|item| item.homepage.is_some()),
+            "本机 npm 全局包应至少有一个主页"
+        );
+
+        let brew = scan_all(Some(vec!["brew".to_string()]));
+        let with_repo = brew
+            .packages
+            .iter()
+            .filter(|item| item.repository.is_some())
+            .count();
+        println!(
+            "brew 包 {} 个，其中有仓库地址 {} 个",
+            brew.packages.len(),
+            with_repo
+        );
     }
 }

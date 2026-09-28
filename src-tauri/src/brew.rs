@@ -57,6 +57,8 @@ pub struct BrewDetail {
     pub version: Option<String>,
     pub description: Option<String>,
     pub homepage: Option<String>,
+    /// 上游源码仓库地址（取自 `urls.head`），界面里做成可点击外链；取不到为 None
+    pub repository: Option<String>,
     pub license: Option<String>,
     pub tap: Option<String>,
     /// 已安装版本；未安装为 None
@@ -216,6 +218,18 @@ fn deprecation_of(item: &serde_json::Value) -> Option<String> {
     })
 }
 
+/// 上游源码仓库。
+///
+/// Homebrew 的 JSON 没有 repository 字段，`urls.head` 指向的就是源码来源——但它有时是
+/// 某个压缩包的下载地址，所以只认看起来像仓库的：以 `.git` 结尾，或落在常见代码托管站上。
+/// 认不出来就返回 None，界面那一行自然不显示，好过给个点开却在下载文件的链接。
+pub(crate) fn repository_of(item: &serde_json::Value) -> Option<String> {
+    let raw = item.get("urls")?.get("head")?.get("url")?.as_str()?;
+    let url = crate::links::web_url(raw)?;
+    let looks_like_repo = raw.trim_end_matches('/').ends_with(".git") || crate::links::is_vcs_host(&url);
+    looks_like_repo.then_some(url)
+}
+
 /// 从 cask 的 artifacts 里挑出 .app 包路径，brew 详情与已安装扫描共用一份。
 ///
 /// 三种真实形态：`{"app": [...], "target": "/Applications/X.app"}`、只有 `{font: [...]}`、
@@ -276,6 +290,7 @@ pub fn parse_formula(json: &str) -> Result<BrewDetail, String> {
         version: stable,
         description: text(item.get("desc")),
         homepage: text(item.get("homepage")),
+        repository: repository_of(item),
         license: text(item.get("license")),
         tap: text(item.get("tap")),
         installed,
@@ -321,6 +336,8 @@ pub fn parse_cask(json: &str) -> Result<BrewDetail, String> {
         version: available,
         description: text(item.get("desc")),
         homepage: text(item.get("homepage")),
+        // cask 的 JSON 只有下载地址，没有源码仓库；主页通常就是仓库，不再猜
+        repository: None,
         license: None,
         tap: text(item.get("tap")),
         installed,
@@ -721,6 +738,27 @@ mod tests {
         assert!(parse_formula("<html>").is_err());
     }
 
+    /// 仓库地址只能从 `urls.head` 推，而它有时是压缩包地址——那种不算仓库。
+    #[test]
+    fn formula_repository_only_from_repo_like_head() {
+        let json = r#"{"formulae":[{
+          "name": "ripgrep",
+          "versions": {"stable": "15.0.0"},
+          "urls": {"head": {"url": "https://github.com/BurntSushi/ripgrep.git"}}
+        }]}"#;
+        assert_eq!(
+            parse_formula(json).unwrap().repository.as_deref(),
+            Some("https://github.com/BurntSushi/ripgrep")
+        );
+
+        let tarball = r#"{"formulae":[{"name":"rg","versions":{"stable":"1"},"urls":{"head":{"url":"https://example.com/rg.tar.gz"}}}]}"#;
+        assert!(parse_formula(tarball).unwrap().repository.is_none());
+
+        // cask 的 JSON 里没有源码仓库，主页通常就是仓库，不去猜
+        let cask = r#"{"casks":[{"token":"docker","version":"4","homepage":"https://www.docker.com"}]}"#;
+        assert!(parse_cask(cask).unwrap().repository.is_none());
+    }
+
     /// 字段名必须与 src/types.ts 一致
     #[test]
     fn brew_json_matches_frontend_contract() {
@@ -733,6 +771,7 @@ mod tests {
             "version",
             "description",
             "homepage",
+            "repository",
             "license",
             "tap",
             "installed",
